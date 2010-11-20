@@ -425,8 +425,9 @@ and remove duplicates."
                    (add-to-list 'result (cons aux toggle) t))))
              (when (memq major-mode vimpulse-auxiliary-modes)
                (setq aux (cdr (assq major-mode entry)))
-               (unless (assq aux result)
-                 (add-to-list 'result (cons aux toggle) t)))
+               (when aux
+                 (unless (assq aux result)
+                   (add-to-list 'result (cons aux toggle) t))))
              result))
           ;; regular mode
           (t
