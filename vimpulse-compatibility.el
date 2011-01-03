@@ -188,12 +188,7 @@ which lists available keys:
   "Flash search matches for duration of `vimpulse-flash-delay'."
   (let ((lazy-highlight-initial-delay 0)
         (isearch-search-fun-function 'vimpulse-search-fun-function)
-        (isearch-case-fold-search case-fold-search)
-        (disable (lambda (&optional arg) (vimpulse-flash-hook t))))
-    (when vimpulse-flash-timer
-      (if (fboundp 'disable-timeout)
-          (disable-timeout vimpulse-flash-timer)
-        (cancel-timer vimpulse-flash-timer)))
+        (isearch-case-fold-search case-fold-search))
     (when (viper-has-face-support-p)
       (isearch-highlight (match-beginning 0) (match-end 0))
       (unless only-current
@@ -208,12 +203,7 @@ which lists available keys:
         (unless (and (boundp 'isearch-lazy-highlight-overlays)
                      isearch-lazy-highlight-overlays)
           (and (fboundp 'isearch-lazy-highlight-update)
-               (isearch-lazy-highlight-update))))
-      (add-hook 'pre-command-hook 'vimpulse-flash-hook)
-      (setq vimpulse-flash-timer
-            (if (fboundp 'run-at-time)
-                (add-timeout vimpulse-flash-delay disable nil)
-              (run-at-time vimpulse-flash-delay nil disable))))))
+               (isearch-lazy-highlight-update)))))))
 
 (defun vimpulse-flash-hook (&optional force)
   "Disable hightlighting if `this-command' is not search.
