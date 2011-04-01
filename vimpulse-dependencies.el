@@ -1,13 +1,5 @@
 ;;; Code:
 
-;;; Compatibility
-(defmacro vimpulse-called-interactively-p ()
-  (if (condition-case nil
-          (progn (called-interactively-p 'any) t)
-        (error nil))
-      '(called-interactively-p 'any)
-    '(called-interactively-p)))
-
 ;;; Version
 (defconst vimpulse-version "0.5+git"
   "The current version of Vimpulse")
@@ -67,6 +59,11 @@ On by default."
 
 (defcustom vimpulse-want-quit-like-Vim t
   "Whether :q quits the editor like in Vim, on by default."
+  :group 'vimpulse
+  :type  'boolean)
+
+(defcustom vimpulse-want-Viper-checkout nil
+  "Whether Viper handles versioning, off by default."
   :group 'vimpulse
   :type  'boolean)
 

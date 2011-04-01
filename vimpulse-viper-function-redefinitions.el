@@ -57,6 +57,16 @@
   (remove-hook 'viper-replace-state-hook
                'viper-restore-cursor-type))
 
+(defadvice viper-ESC (around vimpulse activate)
+  "Exit minibuffer"
+  (if (minibufferp)
+      (abort-recursive-edit)
+    ad-do-it))
+
+(defadvice viper-set-minibuffer-overlay (around vimpulse activate)
+  "Don't color minibuffer"
+  nil)
+
 ;;; Marks
 
 ;; the following makes lowercase marks buffer-local
@@ -189,6 +199,15 @@ Mark is buffer-local unless GLOBAL."
       (viper-execute-com 'viper-goto-mark-and-skip-white nil com)))
    (t
     (error viper-InvalidTextmarker char))))
+
+(defadvice viper-brac-function (around vimpulse activate)
+  (let ((register-alist
+         (mapcar (lambda (e)
+                   (cons (viper-int-to-char (1+ (- (car-safe e) ?a)))
+                         (cdr (cdr-safe e))))
+                 (append vimpulse-local-marks-alist
+                         vimpulse-global-marks-alist))))
+    ad-do-it))
 
 ;;; Code for adding extra states
 
@@ -421,13 +440,12 @@ and remove duplicates."
                           (symbol-value mode)
                           (assq mode entry))
                  (setq aux (cdr (assq mode entry)))
-                 (unless (assq aux result)
+                 (unless (or (null aux) (assq aux result))
                    (add-to-list 'result (cons aux toggle) t))))
              (when (memq major-mode vimpulse-auxiliary-modes)
                (setq aux (cdr (assq major-mode entry)))
-               (when aux
-                 (unless (assq aux result)
-                   (add-to-list 'result (cons aux toggle) t))))
+               (unless (or (null aux) (assq aux result))
+                 (add-to-list 'result (cons aux toggle) t)))
              result))
           ;; regular mode
           (t
@@ -1118,5 +1136,65 @@ docstring. The variable becomes buffer-local whenever set.")
 (defalias 'viper-end-of-word-kernel 'vimpulse-end-of-word-kernel)
 (defalias 'viper-end-of-word 'vimpulse-end-of-word)
 (defalias 'viper-end-of-Word 'vimpulse-end-of-Word)
+
+;; dirty fix that gets rid of the checkout message Viper shows when
+;; using :w on a file in SVN (among others)
+(defadvice viper-maybe-checkout (around vimpulse activate)
+  "Disable if `vimpulse-want-Viper-checkout' is nil."
+  (if vimpulse-want-Viper-checkout
+      ad-do-it
+    (setq ad-return-value t)))
+
+;; `ex-cmd-read-exit', bound by Viper to SPC, is buggy: e.g.,
+;; ":s/foo/set bar" exits the minibuffer before "bar" is typed
+(defun vimpulse-ex-cmd-read-exit ()
+  (interactive)
+  (setq viper-incomplete-ex-cmd t)
+  (let ((quit-regex1 (concat
+                      "\\(" "^set[ \t]*"
+                      "\\|" "^edit[ \t]*"
+                      "\\|" "^[nN]ext[ \t]*"
+                      "\\|" "unm[ \t]*"
+                      "\\|" "^[ \t]*rep"
+                      "\\)"))
+        (quit-regex2 (concat
+                      "[a-zA-Z][ \t]*"
+                      "\\(" "!" "\\|" ">>"
+                      "\\|" "\\+[0-9]+"
+                      "\\)"
+                      "*[ \t]*$"))
+        (stay-regex (concat
+                     "\\(" "^[ \t]*$"
+                     "\\|" "[?/].*"
+                     "\\|" "[ktgjmsz][ \t]*$"
+                     "\\|" "^[ \t]*ab.*"
+                     "\\|" "tr[ansfer \t]*"
+                     "\\|" "sr[ \t]*"
+                     "\\|" "mo.*"
+                     "\\|" "^[ \t]*k?ma[^p]*"
+                     "\\|" "^[ \t]*fi.*"
+                     "\\|" "v?gl.*"
+                     "\\|" "[vg][ \t]*$"
+                     "\\|" "jo.*"
+                     "\\|" "^[ \t]*ta.*"
+                     "\\|" "^[ \t]*una.*"
+                     "\\|" "^[ \t]*\\([`'][a-z]\\|[.,%]\\)*[ \t]*su.*"
+                     "\\|" "^[ \t]*\\([`'][a-z]\\|[.,%]\\)*[ \t]*s[^a-z].*"
+                     "\\|" "['`][a-z][ \t]*"
+                     "\\|" "\\(r\\|re\\|rea\\|read\\)[ \t]*!"
+                     "\\|" "\\(w\\|wr\\|wri\\|writ.?\\)[ \t]+!"
+                     "\\|" "![ \t]*[a-zA-Z].*"
+                     "\\)"
+                     "!*")))
+    (save-window-excursion
+      (setq viper-ex-work-buf (get-buffer-create viper-ex-work-buf-name))
+      (set-buffer viper-ex-work-buf)
+      (goto-char (point-max)))
+    (cond ((viper-looking-back quit-regex1) (exit-minibuffer))
+          ((viper-looking-back stay-regex)  (insert " "))
+          ((viper-looking-back quit-regex2) (exit-minibuffer))
+          (t (insert " ")))))
+
+(defalias 'ex-cmd-read-exit 'vimpulse-ex-cmd-read-exit)
 
 (provide 'vimpulse-viper-function-redefinitions)

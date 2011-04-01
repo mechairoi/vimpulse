@@ -48,6 +48,7 @@
 ;; what he thinks about this. For what it's worth, the following code
 ;; addresses "TODO item #1" in viper.el.
 
+(require 'vimpulse-utils)
 (require 'vimpulse-visual-mode)
 (eval-when-compile (require 'vimpulse-viper-function-redefinitions)) ; vimpulse-define-state
 
@@ -897,12 +898,16 @@ insert or remove any spaces."
 (vimpulse-define-operator vimpulse-fill (beg end)
   "Fill text."
   :move-point nil
-  (setq end (save-excursion
-              (goto-char end)
-              (skip-chars-backward " ")
-              (point)))
+  :whole-lines t
+  (setq end
+        (save-excursion
+          (goto-char end)
+          (skip-chars-backward " ")
+          (max beg (point))))
   (save-excursion
-    (fill-region beg end)))
+    (condition-case nil
+        (fill-region beg end)
+      (error nil))))
 
 (vimpulse-define-operator vimpulse-downcase (beg end)
   "Convert text to lower case."

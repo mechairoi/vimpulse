@@ -1,6 +1,7 @@
 ;;;; Keybindings
 
 (require 'vimpulse-dependencies)
+(require 'vimpulse-modal)
 (require 'vimpulse-visual-mode)         ; vimpulse-apply-on-block, vimpulse-visual-mode
 
 (declare-function vimpulse-range "vimpulse-operator" (&optional no-repeat dont-move-point whole-lines keep-visual custom-motion))
@@ -48,9 +49,6 @@
 (define-key viper-vi-basic-map "zz" 'viper-line-to-middle)
 (define-key viper-vi-basic-map "\C-]" 'vimpulse-jump-to-tag-at-point)
 (define-key viper-vi-basic-map "\C-t" 'pop-tag-mark)
-(define-key viper-vi-basic-map "]" nil) ; delete `viper-ket-function' binding
-(define-key viper-vi-basic-map "]P" 'vimpulse-Put-and-indent)
-(define-key viper-vi-basic-map "]p" 'vimpulse-put-and-indent)
 (define-key viper-vi-basic-map "=" 'vimpulse-indent)
 (define-key viper-vi-basic-map "+" 'vimpulse-previous-line-skip-white)
 (define-key viper-vi-basic-map "_" 'vimpulse-next-line-skip-white)
@@ -63,6 +61,9 @@
 (define-key viper-vi-basic-map "/" 'vimpulse-search-forward)
 (define-key viper-vi-basic-map "?" 'vimpulse-search-backward)
 (define-key viper-vi-kbd-map "/" nil)
+
+(vimpulse-map "]P" 'vimpulse-Put-and-indent)
+(vimpulse-map "]p" 'vimpulse-put-and-indent)
 
 ;; Visual bindings
 (define-key viper-vi-basic-map "v" 'vimpulse-visual-toggle-char)
@@ -87,6 +88,7 @@
     (define-key map "c" 'delete-window)
     (define-key map "s" 'split-window-vertically)
     (define-key map "v" 'split-window-horizontally)
+    (define-key map "=" 'balance-windows)
     (when (fboundp 'windmove-left)
       (define-key map "h" 'windmove-left)
       (define-key map "j" 'windmove-down)
@@ -564,5 +566,68 @@ Search backwards if a match isn't found."
          '(try-expand-line
            try-expand-line-all-buffers)))
     (hippie-expand arg)))
+
+;;; i_CTRL-Y, i_CTRL-E
+
+(defun vimpulse-copy-from-above (arg)
+  "Copy characters from preceding non-blank line.
+The copied text is inserted before point.
+ARG is the number of lines to move backward."
+  (interactive
+   (cond
+    ;; if a prefix argument was given, repeat it for subsequent calls
+    ((and (null current-prefix-arg)
+          (eq last-command 'vimpulse-copy-from-above))
+     (setq current-prefix-arg last-prefix-arg)
+     (list (prefix-numeric-value current-prefix-arg)))
+    (t
+     (list (prefix-numeric-value current-prefix-arg)))))
+  (insert (vimpulse-copy-chars-from-line 1 (- arg))))
+
+(defun vimpulse-copy-from-below (arg)
+  "Copy characters from following non-blank line.
+The copied text is inserted before point.
+ARG is the number of lines to move forward."
+  (interactive
+   (cond
+    ((and (null current-prefix-arg)
+          (eq last-command 'vimpulse-copy-from-below))
+     (setq current-prefix-arg last-prefix-arg)
+     (list (prefix-numeric-value current-prefix-arg)))
+    (t
+     (list (prefix-numeric-value current-prefix-arg)))))
+  (insert (vimpulse-copy-chars-from-line 1 arg)))
+
+;; adapted from `copy-from-above-command' from misc.el
+(defun vimpulse-copy-chars-from-line (n num &optional col)
+  "Return N characters from line NUM, starting at column COL.
+NUM is relative to the current line and can be negative.
+COL defaults to the current column."
+  (interactive "p")
+  (let ((col (or col (current-column))) prefix)
+    (save-excursion
+      (forward-line num)
+      (when (looking-at "[[:space:]]*$")
+        (if (< num 0)
+            (skip-chars-backward " \t\n")
+          (skip-chars-forward " \t\n")))
+      (beginning-of-line)
+      (move-to-column col)
+      ;; if the column winds up in middle of a tab,
+      ;; return the appropriate number of spaces
+      (when (< col (current-column))
+        (if (eq (preceding-char) ?\t)
+            (let ((len (min n (- (current-column) col))))
+              (setq prefix (make-string len ?\s)
+                    n (- n len)))
+          ;; if in middle of a control char, return the whole char
+          (backward-char 1)))
+      (concat prefix
+              (buffer-substring (point)
+                                (min (line-end-position)
+                                     (+ n (point))))))))
+
+(define-key viper-insert-basic-map "\C-y" 'vimpulse-copy-from-above)
+(define-key viper-insert-basic-map "\C-e" 'vimpulse-copy-from-below)
 
 (provide 'vimpulse-misc-keybindings)
