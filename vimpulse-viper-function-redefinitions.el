@@ -39,7 +39,8 @@
 
 (defadvice viper-exit-insert-state (before vimpulse activate)
   "Refresh `vimpulse-exit-point'."
-  (viper-move-marker-locally 'vimpulse-exit-point (point)))
+  (let (abbrev-mode)
+    (viper-move-marker-locally 'vimpulse-exit-point (point))))
 
 (defun vimpulse-set-replace-cursor-type ()
   "Display a horizontal bar cursor."
@@ -148,10 +149,11 @@ Mark is buffer-local unless GLOBAL."
                (goto-char marker))))
       (when com
         (viper-move-marker-locally 'viper-com-point (point)))
-      (if (and (viper-same-line (point) viper-last-jump)
-               (= (point) viper-last-jump-ignore))
-          (push-mark viper-last-jump t)
-        (push-mark nil t))
+      (unless (region-active-p)
+        (if (and (viper-same-line (point) viper-last-jump)
+                 (= (point) viper-last-jump-ignore))
+            (push-mark viper-last-jump t)
+          (push-mark nil t)))
       (setq viper-last-jump (point-marker))
       (when skip-white
         (back-to-indentation)
@@ -174,10 +176,11 @@ Mark is buffer-local unless GLOBAL."
       (goto-char viper-last-jump))
     (when (null (mark t))
       (error "Mark is not set in this buffer"))
-    (when (= (point) (mark t))
-      (pop-mark))
-    (push-mark (prog1 (point)
-                 (goto-char (or (mark t) (point)))) t)
+    (unless (region-active-p)
+      (when (= (point) (mark t))
+        (pop-mark))
+      (push-mark (prog1 (point)
+                   (goto-char (or (mark t) (point)))) t))
     (setq viper-last-jump (point-marker)
           viper-last-jump-ignore 0)
     (when com
@@ -188,10 +191,11 @@ Mark is buffer-local unless GLOBAL."
     (when (and (viper-same-line (point) viper-last-jump)
                (= (point) viper-last-jump-ignore))
       (goto-char viper-last-jump))
-    (when (= (point) (mark t))
-      (pop-mark))
-    (push-mark (prog1 (point)
-                 (goto-char (or (mark t) (point)))) t)
+    (unless (region-active-p)
+      (when (= (point) (mark t))
+        (pop-mark))
+      (push-mark (prog1 (point)
+                   (goto-char (or (mark t) (point)))) t))
     (setq viper-last-jump (point))
     (back-to-indentation)
     (setq viper-last-jump-ignore (point))
@@ -943,7 +947,8 @@ mode-specific modifications to %s.\n\n%s" state-name doc) t))
 (when (fboundp 'font-lock-add-keywords)
   (font-lock-add-keywords
    'emacs-lisp-mode
-   '(("(\\(vimpulse-define-[-[:word:]]+\\)\\>[ \f\t\n\r\v]*\\(\\sw+\\)?"
+   '(("(\\(vimpulse-define-\\(?:[^ k][^ e][^ y]\\|[-[:word:]]\\{4,\\}\\)\\)\
+\\>[ \f\t\n\r\v]*\\(\\sw+\\)?"
       (1 font-lock-keyword-face)
       (2 font-lock-function-name-face nil t)))))
 
@@ -1017,6 +1022,9 @@ docstring. The variable becomes buffer-local whenever set.")
                         (re-search-backward string))
                     (search-forward string nil nil val)
                     (search-backward string))
+		  ;; handle opening and closing of invisible area
+		  (funcall isearch-filter-predicate
+			   (match-beginning 0) (match-end 0))
                   (if (not (equal (point) start-point))
                       (push-mark start-point t)))
               (search-failed
@@ -1047,6 +1055,9 @@ docstring. The variable becomes buffer-local whenever set.")
                 (if viper-re-search
                     (re-search-backward string nil nil val)
                   (search-backward string nil nil val))
+                ;; handle opening and closing of invisible area
+		(funcall isearch-filter-predicate
+			 (match-beginning 0) (match-end 0))
                 (if (not (equal (point) start-point))
                     (push-mark start-point t)))
             (search-failed

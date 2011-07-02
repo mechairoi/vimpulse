@@ -2,7 +2,7 @@
 
 (require 'vimpulse-dependencies)
 (require 'vimpulse-modal)
-(require 'vimpulse-visual-mode)         ; vimpulse-apply-on-block, vimpulse-visual-mode
+(require 'vimpulse-visual-mode) ; vimpulse-apply-on-block, vimpulse-visual-mode
 
 (declare-function vimpulse-range "vimpulse-operator" (&optional no-repeat dont-move-point whole-lines keep-visual custom-motion))
 (declare-function vimpulse-set-replace-cursor-type "vimpulse-viper-function-redefinitions" nil)
@@ -24,6 +24,7 @@
 (define-key viper-vi-basic-map "gf" 'find-file-at-point)
 (define-key viper-vi-basic-map "gg" 'vimpulse-goto-first-line)
 (define-key viper-vi-basic-map "gh" 'backward-char)
+(define-key viper-vi-basic-map "ga" 'what-cursor-position)
 (define-key viper-vi-basic-map "gi" 'vimpulse-resume-insert)
 (define-key viper-vi-basic-map "gj" 'next-line)
 (define-key viper-vi-basic-map "gk" 'previous-line)
@@ -50,8 +51,7 @@
 (define-key viper-vi-basic-map "\C-]" 'vimpulse-jump-to-tag-at-point)
 (define-key viper-vi-basic-map "\C-t" 'pop-tag-mark)
 (define-key viper-vi-basic-map "=" 'vimpulse-indent)
-(define-key viper-vi-basic-map "+" 'vimpulse-previous-line-skip-white)
-(define-key viper-vi-basic-map "_" 'vimpulse-next-line-skip-white)
+(define-key viper-vi-basic-map "_" 'viper-next-line-at-bol)
 (define-key viper-vi-basic-map "#" 'vimpulse-search-backward-for-symbol-at-point)
 (define-key viper-vi-basic-map "*" 'vimpulse-search-forward-for-symbol-at-point)
 (define-key viper-vi-basic-map "<" 'vimpulse-shift-left)
@@ -64,6 +64,12 @@
 
 (vimpulse-map "]P" 'vimpulse-Put-and-indent)
 (vimpulse-map "]p" 'vimpulse-put-and-indent)
+
+;; go to last change
+(when (fboundp 'goto-last-change)
+  (define-key viper-vi-basic-map "g;" 'goto-last-change))
+(when (fboundp 'goto-last-change-reverse)
+  (define-key viper-vi-basic-map "g," 'goto-last-change-reverse))
 
 ;; Visual bindings
 (define-key viper-vi-basic-map "v" 'vimpulse-visual-toggle-char)
@@ -110,6 +116,10 @@ Equivalent to Vim's C-w prefix.")
 (define-key viper-insert-basic-map [delete] 'delete-char) ; <delete> key
 ;; make ^[ work
 (define-key viper-insert-basic-map (kbd "ESC") 'viper-exit-insert-state)
+;; paste
+(define-key viper-insert-basic-map "\C-r" 'vimpulse-paste-in-insert)
+;; temporarily escape to vi state
+(define-key viper-insert-basic-map "\C-o" 'viper-escape-to-vi)
 
 ;;; "
 
@@ -245,32 +255,6 @@ Equivalent to Vim's C-w prefix.")
     (goto-char vimpulse-exit-point))
   (viper-insert arg))
 
-;;; +, _
-
-(defun vimpulse-previous-line-skip-white (&optional arg)
-  "Go ARG lines backward and to the first non-blank character."
-  (interactive "P")
-  (let ((val (viper-p-val arg))
-        (com (viper-getcom arg)))
-    (when com
-      (viper-move-marker-locally 'viper-com-point (point)))
-    (forward-line (- val))
-    (back-to-indentation)
-    (when com
-      (viper-execute-com 'vimpulse-previous-line-nonblank val com))))
-
-(defun vimpulse-next-line-skip-white (&optional arg)
-  "Go ARG lines forward and to the first non-blank character."
-  (interactive "P")
-  (let ((val (viper-p-val arg))
-        (com (viper-getcom arg)))
-    (when com
-      (viper-move-marker-locally 'viper-com-point (point)))
-    (forward-line val)
-    (back-to-indentation)
-    (when com
-      (viper-execute-com 'vimpulse-next-line-nonblank val com))))
-
 ;;; *, #
 
 (defun vimpulse-search-string (&optional pos thing backward regexp)
@@ -286,10 +270,11 @@ Returns the empty string if nothing is found."
     (let ((str (thing-at-point thing)))
       ;; if there's nothing under point, go forwards
       ;; (or backwards) to find it
-      (while (and (not str) (or (and backward (not (bobp)))
-                                (and (not backward) (not (eobp)))))
+      (while (and (null str)
+                  (or (and backward (not (bobp)))
+                      (and (not backward) (not (eobp)))))
         (if backward (backward-char) (forward-char))
-        (setq str (thing-at-point 'symbol)))
+        (setq str (thing-at-point thing)))
       (setq str (or str ""))
       ;; no text properties, thank you very much
       (set-text-properties 0 (length str) nil str)
@@ -629,5 +614,15 @@ COL defaults to the current column."
 
 (define-key viper-insert-basic-map "\C-y" 'vimpulse-copy-from-above)
 (define-key viper-insert-basic-map "\C-e" 'vimpulse-copy-from-below)
+
+;; paste in Insert state by pressing "C-r <register>"
+(defun vimpulse-paste-in-insert (register)
+  "Paste in Insert state from REGISTER."
+  (interactive (list (read-char)))
+  (if (viper-valid-register register)
+      (setq viper-use-register register)
+    (setq viper-use-register nil))
+  (viper-Put-back nil)
+  (forward-char))
 
 (provide 'vimpulse-misc-keybindings)
